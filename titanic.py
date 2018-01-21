@@ -1,11 +1,13 @@
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import AdaBoostClassifier
+from sklearn.ensemble import ExtraTreesClassifier
+
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn import tree
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import GridSearchCV
 import time
-import graphviz
 from sklearn import preprocessing
 
 
@@ -38,14 +40,40 @@ def get_rf_predictions(testing_set, clf, min_max_scaler):
     with open('output_file.csv', 'w') as f:
         output_df.to_csv(f, index=False)
 
+
+def get_ada_predictions(testing_set, clf, min_max_scaler):
+    test_x = [i[0] for _, i in testing_set.items()]
+    #test_y = [i[1] for i in testing_set.item()]
+
+    test_x = min_max_scaler.fit_transform(test_x)
+
+    pred = clf.predict(test_x)
+
+    output_df = []
+    for i, j in zip(testing_set.keys(), pred):
+        output_df.append({'PassengerId':i,'Survived':int(j)})
+
+    output_df = pd.DataFrame.from_dict(output_df)
+    with open('output_file.csv', 'w') as f:
+        output_df.to_csv(f, index=False)
+
+
+def get_ada_model(training_set, min_max_scaler):
+    clf = RandomForestClassifier(n_estimators=500)
+    train_x = [i[0] for _, i in training_set.items()]
+    train_y = [i[1] for _, i in training_set.items()]
+
+    train_x = np.squeeze(np.array(train_x))
+    train_y = np.squeeze(np.array(train_y))
+    train_x = min_max_scaler.fit_transform(train_x)
+
+    clf.fit(train_x, train_y)
+    return clf
+
+
 def get_rf_model(training_set, min_max_scaler):
-    clf = RandomForestClassifier(n_estimators=128,
-                                 bootstrap=True,
-                                 criterion='entropy',
-                                 max_depth=None,
-                                 max_features=None,
-                                 min_samples_leaf=5,
-                                 min_samples_split=5)
+    clf = RandomForestClassifier(n_estimators=1024)
+    #clf = ExtraTreesClassifier(n_estimators=256)
     train_x = [i[0] for _, i in training_set.items()]
     train_y = [i[1] for _, i in training_set.items()]
 
@@ -176,17 +204,16 @@ def extract_features_from_row(row_tuple):
     is_cabin_there = int(row['is_cabin_there'])
 
     embarked_part_array = [0 for i in range(4)]
-    if 'S' in name.lower():
+    if 'S' in name.upper():
         embarked_part_array[0] = 1
-    elif 'C' in name.lower():
+    elif 'C' in name.upper():
         embarked_part_array[1] = 1
-    elif 'Q' in name.lower():
+    elif 'Q' in name.upper():
         embarked_part_array[2] = 1
     else:
         embarked_part_array[3] = 1
 
-    output_x = [sex, sibsp, parch, fare, age, is_age_there,
-                is_cabin_there] + embarked_part_array + name_part_array + pj_class
+    output_x = [sex, sibsp, parch, fare, age] + embarked_part_array + name_part_array + pj_class
     return output_x
 
 def get_features(input_df):
@@ -221,7 +248,8 @@ def read_dt(training_set):
     train_y = [[i[1]] for _, i in training_set.items()]
     train_x = np.squeeze(np.array(train_x))
     train_y = np.squeeze(np.array(train_y))
-    min_max_scaler = preprocessing.MinMaxScaler()
+    #min_max_scaler = preprocessing.MinMaxScaler([-1,1])
+    min_max_scaler = preprocessing.QuantileTransformer(output_distribution = 'normal', random_state = 0)
     train_x = min_max_scaler.fit_transform(train_x)
 
     clf.fit(train_x, train_y)
@@ -230,15 +258,16 @@ def read_dt(training_set):
 
 
 def main():
-    train_df = pd.read_csv(r'C:\Users\tdelforge\Documents\Kaggle_datasets\titanic\train.csv')
-    test_df = pd.read_csv(r'C:\Users\tdelforge\Documents\Kaggle_datasets\titanic\test.csv')
+    train_df = pd.read_csv(r'C:\Users\trist\Documents\db_loc\titanic_data\train.csv')
+    test_df = pd.read_csv(r'C:\Users\trist\Documents\db_loc\titanic_data\test.csv')
 
     train_features = get_features(train_df)
     min_max_scaler =read_dt(train_features)
-    #tune_rf(train_features)
     test_features = get_features(test_df)
     clf = get_rf_model(train_features, min_max_scaler)
     get_rf_predictions(test_features, clf, min_max_scaler)
+    # clf = get_ada_model(train_features, min_max_scaler)
+    # get_ada_predictions(test_features, clf, min_max_scaler)
 
 if __name__ == '__main__':
     main()
